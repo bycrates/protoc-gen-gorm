@@ -14,7 +14,7 @@ import (
 
 	"log"
 
-	"github.com/infobloxopen/protoc-gen-gorm/options"
+	gorm "github.com/infobloxopen/protoc-gen-gorm/options"
 )
 
 const (
@@ -22,6 +22,7 @@ const (
 	typeEnum    = 14
 
 	protoTypeTimestamp = "Timestamp" // last segment, first will be *google_protobufX
+	protoTypeDuration  = "Duration"  // last segment, first will be *google_protobufX
 	protoTypeJSON      = "JSONValue"
 	protoTypeUUID      = "UUID"
 	protoTypeUUIDValue = "UUIDValue"
@@ -276,6 +277,8 @@ func (p *OrmPlugin) parseBasicFields(msg *generator.Descriptor) {
 				fieldType = "*time.Time"
 				typePackage = "time"
 				p.UsingGoImports("time")
+			} else if rawType == protoTypeDuration {
+				fieldType = "*int64"
 			} else if rawType == protoTypeJSON {
 				if p.dbEngine == ENGINE_POSTGRES {
 					fieldType = fmt.Sprintf("*%s.Jsonb", p.Import(gormpqImport))
@@ -783,6 +786,21 @@ func (p *OrmPlugin) generateFieldConversion(message *generator.Descriptor, field
 				p.P(`if to.`, fieldName, `, err = `, p.Import(ptypesImport), `.TimestampProto(*m.`, fieldName, `); err != nil {`)
 				p.P(`return to, err`)
 				p.P(`}`)
+				p.P(`}`)
+			}
+		} else if coreType == protoTypeDuration {
+			if toORM {
+				p.P(`if m.`, fieldName, ` != nil {`)
+				p.P(`var t time.Duration`)
+				p.P(`if t, err = `, p.Import(ptypesImport), `.Duration(m.`, fieldName, `); err != nil {`)
+				p.P(`return to, err`)
+				p.P(`}`)
+				p.P(`tCon := t.Nanoseconds()`)
+				p.P(`to.`, fieldName, ` = &tCon`)
+				p.P(`}`)
+			} else {
+				p.P(`if m.`, fieldName, ` != nil {`)
+				p.P(`to.`, fieldName, ` = `, p.Import(ptypesImport), `.DurationProto(`, p.Import("time"), `.Duration((*m.`, fieldName, `)) * `, p.Import("time"), `.Nanosecond)`)
 				p.P(`}`)
 			}
 		} else if coreType == protoTypeJSON {
